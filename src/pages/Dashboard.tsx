@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { useWallet } from '../context/WalletContext';
 import { motion } from 'framer-motion';
 
+
 // Components
 import NetworkSelector from '../components/NetworkSelector';
 import WalletCard from '../components/WalletCard';
@@ -12,22 +13,17 @@ import TransactionList from '../components/TransactionList';
 import ReceiveModal from '../components/ReceiveModal';
 
 export default function Dashboard() {
+  const {checkWalletExists}=useWallet();
   const navigate = useNavigate();
-  const { getBalance } = useWallet();
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   
-  // Refresh balances when dashboard loads
-  useState(() => {
-    getBalance();
-  });
-  
+
   const logout = () => {
-    // In a real app, would clear wallet data
-    localStorage.removeItem('walletData');
+  localStorage.removeItem('walletData');
     navigate('/');
+     checkWalletExists();
     
-    // For demo, just show an alert
-    alert('Logout functionality would be implemented here in a real wallet app.');
+
   };
 
   return (
@@ -37,13 +33,14 @@ export default function Dashboard() {
         
         <div className="flex gap-2">
           <button
+          onClick={()=>navigate("/settings")}
             className="rounded-full p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
             title="Settings"
           >
             <Settings size={18} />
           </button>
           <button
-            onClick={logout}
+            onClick={()=>{logout()}}
             className="rounded-full p-2 text-neutral-400 hover:bg-neutral-800 hover:text-white"
             title="Logout"
           >

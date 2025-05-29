@@ -21,7 +21,7 @@ export default function Welcome() {
           transition={{ delay: 0.2, duration: 0.5 }}
           className="mb-2 text-center text-3xl font-bold text-white"
         >
-          Dual Chain Wallet
+          Fluid Wallet
         </motion.h1>
         
         <motion.p

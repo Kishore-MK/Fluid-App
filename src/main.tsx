@@ -1,15 +1,17 @@
-import { StrictMode } from 'react';
-import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
-import App from './App';
-import './index.css';
-import { WalletProvider } from './context/WalletContext';
+import { StrictMode } from "react";
+import { createRoot } from "react-dom/client";
+import { BrowserRouter, HashRouter } from "react-router-dom";
+import App from "./App";
+import "./index.css";
+import { WalletProvider } from "./context/WalletContext";
 
-createRoot(document.getElementById('root')!).render(
+createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <WalletProvider>
-        <App />
+        <HashRouter>
+          <App />
+        </HashRouter>
       </WalletProvider>
     </BrowserRouter>
   </StrictMode>

@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Fluid Wallet",
+  "version": "0.0.1",
+  "description": "Cross-chain Ethereum wallet",
+  "permissions": ["storage"],
+  
+"action": { 
+    "default_popup": "index.html"
+  },
+  "host_permissions": [
+  "http://localhost:3000/*", 
+  "https://sepolia.infura.io/*" 
+]
+
+}
