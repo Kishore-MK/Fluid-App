@@ -12,6 +12,12 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { ethers } from "ethers";
+import { Account,  CallData, Provider as StarknetProvider, uint256 } from "starknet";
+
+const STARKNET_STRK_CONTRACT =
+  "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
+const STARKNET_RPC = "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
+const starknetProvider = new StarknetProvider({ nodeUrl: STARKNET_RPC });
 
 interface Transaction {
   hash?: string;
@@ -26,7 +32,14 @@ interface Transaction {
 
 export default function SendPage() {
   const navigate = useNavigate();
-  const { selectedNetwork, ethAddress, strkAddress } = useWallet();
+  const {
+    selectedNetwork,
+    ethAddress,
+    strkAddress,
+    estimateEthGas,
+    estimateStrkGas,
+  } = useWallet();
+
   const [recipient, setRecipient] = useState("");
   const [amount, setAmount] = useState("");
   const [isSending, setIsSending] = useState(false);
@@ -35,90 +48,161 @@ export default function SendPage() {
   const [transaction, setTransaction] = useState<Transaction | null>(null);
 
   const address = selectedNetwork === "ethereum" ? ethAddress : strkAddress;
-  const [privateKey, setPrivateKey] = useState("");
 
-  useEffect(() => {
-    if (amount && recipient && !isSending) {
-      calculateGasFees();
-    } else {
-      setGasData(null);
-    }
-  }, [amount, recipient, selectedNetwork]);
-
+  // Manual gas calculation function
   const calculateGasFees = async () => {
-    if (!amount || !recipient) return;
+    if (!amount || !recipient || isSending) {
+      return;
+    }
+
     setIsLoadingGas(true);
+
     try {
-      const response = await fetch("http://localhost:3000/api/calculate-gas", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          network: selectedNetwork,
-          to: recipient,
-          amount: amount,
-          from: address,
-        }),
-      });
-      const data = await response.json();
-      if (data.success) {
-        setGasData(data.gasData);
+      let gasEstimate;
+
+      if (selectedNetwork === "ethereum") {
+        if(!ethers.isAddress(recipient)){
+          return
+        }
+        gasEstimate = await estimateEthGas(recipient, amount);
+      } else if (selectedNetwork === "starknet") {
+        console.log("Estimating strk gas");
+
+        gasEstimate = await estimateStrkGas(recipient, amount);
       }
+
+      setGasData(gasEstimate);
     } catch (error) {
       console.error("Gas calculation failed:", error);
+      setGasData(null);
     } finally {
       setIsLoadingGas(false);
     }
   };
-  const handleSend = async () => {
-    const walletData = localStorage.getItem("walletData");
-    console.log(walletData);
-    const parsed = JSON.parse(walletData || "");
-    setPrivateKey(`0x${parsed.ethPrivateKey}`);
-    console.log(privateKey);
 
-    if (!recipient || !amount || !privateKey) {
-      console.log("No keys!");
+  // Clear gas data when inputs change
+  useEffect(() => {
+    console.log(selectedNetwork);
+
+    setGasData(null);
+  }, [amount, recipient, selectedNetwork]);
+
+  const handleEthereumSend = async () => {
+    const walletData = localStorage.getItem("walletData");
+    const parsed = JSON.parse(walletData || "");
+    const privateKey = `0x${parsed.ethPrivateKey}`;
+
+    const provider = new ethers.JsonRpcProvider(
+      "https://sepolia.infura.io/v3/ac6e626c10c0408993e1f9dc777bbd18"
+    );
+    const wallet = new ethers.Wallet(privateKey, provider);
+
+    const tx = await wallet.sendTransaction({
+      to: recipient,
+      value: ethers.parseEther(amount),
+      gasPrice: gasData?.gasPrice
+        ? ethers.parseUnits(gasData.gasPrice.toString(), "gwei")
+        : undefined,
+      gasLimit: gasData?.gasLimit
+        ? ethers.toBigInt(gasData.gasLimit)
+        : undefined,
+    });
+
+    console.log("Ethereum transaction sent:", tx);
+
+    setTransaction({
+      hash: tx.hash,
+      status: "pending",
+      network: selectedNetwork,
+      amount,
+      to: recipient,
+      gasUsed: "",
+      gasFee: gasData?.totalFee || "",
+    });
+
+    // Wait for confirmation
+    const receipt = await tx.wait();
+    if (receipt?.status === 1) {
+      setTransaction((prev) => ({
+        ...prev!,
+        status: "confirmed",
+        gasUsed: receipt.gasUsed.toString(),
+      }));
+    } else {
+      setTransaction((prev) => ({
+        ...prev!,
+        status: "failed",
+        error: "Transaction reverted",
+      }));
     }
+  };
+
+  const handleStarknetSend = async () => {
+    const walletData = localStorage.getItem("walletData");
+    const parsed = JSON.parse(walletData || "");
+    const strkPrivateKey = parsed.strkPrivateKey;
+
+    const account = new Account(starknetProvider, strkAddress!, strkPrivateKey);
+    const rawAmount = BigInt(parseFloat(amount) * 1e18);
+    const value =  uint256.bnToUint256(rawAmount);
+   
+
+    const tx = {
+      contractAddress: STARKNET_STRK_CONTRACT,
+      entrypoint: "transfer",
+      calldata: CallData.compile({
+        recipient: recipient.toLowerCase(),
+        amount: value,
+      }),
+    };
+
+    console.log("Sending Starknet transaction:", tx);
+
+    const response = await account.execute(tx, {
+      maxFee: gasData?.suggestedMaxFee
+        ? ethers.parseUnits(gasData.suggestedMaxFee, 18)
+        : undefined,
+    });
+
+    console.log("Starknet transaction sent:", response);
+
+    setTransaction({
+      hash: response.transaction_hash,
+      status: "pending",
+      network: selectedNetwork,
+      amount,
+      to: recipient,
+      gasUsed: "",
+      gasFee: gasData?.totalFee || "",
+    });
+
+    // Wait for confirmation
+    try {
+      await starknetProvider.waitForTransaction(response.transaction_hash);
+      setTransaction((prev) => ({
+        ...prev!,
+        status: "confirmed",
+      }));
+    } catch (error) {
+      console.error("Starknet transaction failed:", error);
+      setTransaction((prev) => ({
+        ...prev!,
+        status: "failed",
+        error: "Transaction failed or reverted",
+      }));
+    }
+  };
+
+  const handleSend = async () => {
+    if (!recipient || !amount || !gasData) return;
+
     setIsSending(true);
 
     try {
-      const wallet = new ethers.Wallet(privateKey);
-      const provider = new ethers.JsonRpcProvider(
-        "https://sepolia.infura.io/v3/ac6e626c10c0408993e1f9dc777bbd18"
-      );
-      const signer = wallet.connect(provider);
-
-      const tx = await signer.sendTransaction({
-        to: recipient,
-        value: ethers.parseEther(amount),
-        gasPrice: gasData
-          ? ethers.parseUnits(gasData.gasPrice.toString(), "gwei")
-          : undefined,
-        gasLimit: gasData ? ethers.toBigInt(gasData.gasLimit) : undefined,
-      });
-
-      console.log("Transaction sent:", tx);
-
-      setTransaction({
-        hash: tx.hash,
-        status: "pending",
-        network: selectedNetwork,
-        amount,
-        to: recipient,
-        gasUsed: "",
-        gasFee: "",
-      });
-
-      // Wait for confirmation (optional)
-      const receipt = await tx.wait();
-      if (receipt?.status === 1) {
-        setTransaction((prev) => ({ ...prev!, status: "confirmed" }));
+      if (selectedNetwork === "ethereum") {
+        await handleEthereumSend();
       } else {
-        setTransaction((prev) => ({
-          ...prev!,
-          status: "failed",
-          error: "Transaction reverted",
-        }));
+        await handleStarknetSend();
       }
 
       // Reset inputs
@@ -135,58 +219,6 @@ export default function SendPage() {
       setIsSending(false);
     }
   };
-
-  //   const handleSend = async () => {
-  //     if (!recipient || !amount || !gasData) return;
-  //     setIsSending(true);
-  //     try {
-  //       const response = await fetch('http://localhost:3000/api/send-transaction', {
-  //         method: 'POST',
-  //         headers: { 'Content-Type': 'application/json' },
-  //         body: JSON.stringify({
-  //           network: selectedNetwork,
-  //           to: recipient,
-  //           amount: amount,
-  //           from: address,
-  //           gasData: gasData
-  //         })
-  //       });
-  //       const data = await response.json();
-
-  //       if (data.success) {
-  //         setTransaction({
-  //           hash: data.txHash,
-  //           status: 'pending',
-  //           network: selectedNetwork,
-  //           amount: amount,
-  //           to: recipient,
-  //           gasUsed: gasData.gasLimit,
-  //           gasFee: gasData.totalFee
-  //         });
-
-  //         setTimeout(() => {
-  //           setTransaction(prev => ({ ...prev!, status: 'confirmed' }));
-  //         }, 3000);
-
-  //         setRecipient('');
-  //         setAmount('');
-  //         setGasData(null);
-  //       } else {
-  //         setTransaction({
-  //           status: 'failed',
-  //           error: data.error || 'Transaction failed'
-  //         });
-  //       }
-  //     } catch (err) {
-  //       console.error('Send failed:', err);
-  //       setTransaction({
-  //         status: 'failed',
-  //         error: 'Network error occurred'
-  //       });
-  //     } finally {
-  //       setIsSending(false);
-  //     }
-  //   };
 
   const getStatusIcon = (status: string) => {
     switch (status) {
@@ -211,6 +243,14 @@ export default function SendPage() {
         return "border-red-400/30 bg-red-400/10";
       default:
         return "border-neutral-800/50";
+    }
+  };
+
+  const getExplorerUrl = (hash: string) => {
+    if (selectedNetwork === "ethereum") {
+      return `https://sepolia.etherscan.io/tx/${hash}`;
+    } else {
+      return `https://sepolia.starkscan.co/tx/${hash}`;
     }
   };
 
@@ -250,13 +290,14 @@ export default function SendPage() {
 
           <div>
             <label className="block text-sm mb-1 text-white/70">To:</label>
-
             <input
               type="text"
-              placeholder="Recipient address"
+              placeholder={`Recipient ${
+                selectedNetwork === "ethereum" ? "Ethereum" : "Starknet"
+              } address`}
               value={recipient}
               onChange={(e) => setRecipient(e.target.value)}
-              className="w-full rounded-md bg-white/10 px-3 py-2 text-sm text-white"
+              className="w-full rounded-md bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50"
             />
           </div>
 
@@ -268,9 +309,26 @@ export default function SendPage() {
               placeholder="0.0"
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
-              className="w-full rounded-md bg-white/10 px-3 py-2 text-sm text-white"
+              className="w-full rounded-md bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50"
             />
           </div>
+
+          {/* Calculate Gas Button */}
+          {amount && recipient && !gasData && !isLoadingGas && (
+            <motion.button
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.95 }}
+              onClick={calculateGasFees}
+              disabled={isSending}
+              className="w-full glass-effect rounded-lg px-4 py-3 text-sm text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200 border border-white/10 hover:border-white/20"
+            >
+              <div className="flex items-center justify-center gap-2">
+                <Fuel size={16} className="text-orange-400" />
+                <span>Calculate Gas Fees</span>
+              </div>
+            </motion.button>
+          )}
 
           <AnimatePresence>
             {(gasData || isLoadingGas) && (
@@ -297,21 +355,37 @@ export default function SendPage() {
                     <div className="flex justify-between">
                       <span className="text-white/70">Gas Price:</span>
                       <span className="text-white">
-                        {gasData.gasPrice} Gwei
+                        {selectedNetwork === "ethereum"
+                          ? `${gasData.gasPrice} Gwei`
+                          : gasData.gasPrice}
                       </span>
                     </div>
-                    <div className="flex justify-between">
+                    {gasData.gasLimit&&(<div className="flex justify-between">
                       <span className="text-white/70">Gas Limit:</span>
                       <span className="text-white">
-                        {gasData.gasLimit.toLocaleString()}
+                        {gasData.gasLimit?.toLocaleString?.()||""}
                       </span>
-                    </div>
+                    </div>)}
+                    {selectedNetwork === "starknet" &&
+                      gasData.suggestedMaxFee && (
+                        <div className="flex justify-between">
+                          <span className="text-white/70">
+                            Suggested Max Fee:
+                          </span>
+                          <span className="text-white">
+                            {typeof gasData.suggestedMaxFee === "string"
+                              ? parseFloat(gasData.suggestedMaxFee).toFixed(6)
+                              : gasData.suggestedMaxFee.toFixed(6)}{" "}
+                            STRK
+                          </span>
+                        </div>
+                      )}
                     <div className="flex justify-between border-t border-white/10 pt-2">
                       <span className="text-white/90 font-medium">
                         Total Fee:
                       </span>
                       <span className="text-white font-medium">
-                        {gasData.totalFee}{" "}
+                        {parseFloat(gasData.totalFee).toFixed(6)}{" "}
                         {selectedNetwork === "ethereum" ? "ETH" : "STRK"}
                       </span>
                     </div>
@@ -358,19 +432,17 @@ export default function SendPage() {
                 </span>
               </div>
 
-              <div className="space-y-3 text-sm flex">
+              <div className="space-y-3 text-sm">
                 {transaction.hash && (
                   <div>
                     <span className="text-white/70">Transaction Hash:</span>
                     <div
                       className="flex gap-1 cursor-pointer"
                       onClick={() => {
-                        window.open(
-                          `https://sepolia.etherscan.io/tx/${transaction.hash}`
-                        );
+                        window.open(getExplorerUrl(transaction.hash!));
                       }}
                     >
-                      <div className="font-mono text-s  rounded px-2 py-1 mt-1 overflow-auto hover:underline custom-scrollbar">
+                      <div className="font-mono text-s rounded px-2 py-1 mt-1 overflow-auto hover:underline custom-scrollbar">
                         {`${transaction.hash.slice(
                           0,
                           8
@@ -385,6 +457,13 @@ export default function SendPage() {
                         <ExternalLink size={13} />
                       </motion.button>
                     </div>
+                  </div>
+                )}
+
+                {transaction.error && (
+                  <div className="text-red-400">
+                    <span className="text-white/70">Error:</span>{" "}
+                    {transaction.error}
                   </div>
                 )}
               </div>

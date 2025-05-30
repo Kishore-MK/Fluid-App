@@ -1,4 +1,4 @@
-import { Plus, Send, RotateCw, History, TicketMinus } from 'lucide-react';
+import { Plus, RotateCw, History, TicketMinus } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';

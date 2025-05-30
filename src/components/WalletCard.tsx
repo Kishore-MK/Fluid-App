@@ -3,7 +3,6 @@ import {
   ExternalLink,
   Send,
   ArrowDownToLine,
-  Settings,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useWallet } from "../context/WalletContext";

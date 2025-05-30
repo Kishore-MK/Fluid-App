@@ -1,6 +1,6 @@
-import { ec, hash, num, Provider, uint256 } from "starknet";
+import {Provider, uint256 } from "starknet";
  
-import { Account, Contract, json, RpcProvider } from "starknet";
+import { Account, Contract, } from "starknet";
 // vite-compatible import
 
  
@@ -515,18 +515,15 @@ export const STRK_contract = new Contract(
 );
 
 
-// const wallet = localStorage.getItem("walletData");
-// console.log(wallet);
+const wallet = localStorage.getItem("walletData");
+console.log(wallet);
 
-// const parsed = JSON.parse(wallet || "");
+const parsed = JSON.parse(wallet || "");
 
-// const STRK_PUBLIC_KEY =parsed.strkPublicKey
-// const ACCOUNT_ADDRESS = parsed.strkAddress;
-//  const ETH_ADDRESS=parsed.ethAddress
-// const PRIVATE_KEY = parsed.strkPrivateKey
-const STRK_PRIVATE_KEY = "0x010f56014ee1e9ae06cfe99a9375f1176402549922e5e50db0f1fa6d70b86044";
-const STRK_ACCOUNT_ADDRESS="0x49626b8e180e55e3e675a15eff4fbb0c3d1d23c54c86ae5b447c1351a7a5d8e"
-const ETH_ADDRESS ="0x393E15917CD21FBd3a71a5f1269334f3fd620869"
+const STRK_ACCOUNT_ADDRESS = parsed.strkAddress;
+ const ETH_ADDRESS=parsed.ethAddress
+const STRK_PRIVATE_KEY = parsed.strkPrivateKey
+
 export const STRK_account = new Account(
   STRK_provider,
   STRK_ACCOUNT_ADDRESS!,

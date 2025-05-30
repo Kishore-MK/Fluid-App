@@ -1,8 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, Send, Clock, CheckCircle, XCircle, RefreshCw, ExternalLink } from "lucide-react";
-import { useWallet } from "../context/WalletContext";
+import { ArrowLeft,  Clock, CheckCircle, XCircle, RefreshCw, ExternalLink } from "lucide-react";
 import { lockStrkTokens } from "../utils/strkbridge";
 
 interface BridgeTx {
@@ -16,15 +15,12 @@ interface BridgeTx {
 
 export default function BridgePage() {
   const navigate = useNavigate();
-  const { ethAddress, strkAddress } = useWallet();
-
   const [fromNetwork, setFromNetwork] = useState("ethereum");
   const [toNetwork, setToNetwork] = useState("starknet");
   const [amount, setAmount] = useState("");
   const [isBridging, setIsBridging] = useState(false);
   const [bridgeTx, setBridgeTx] = useState<BridgeTx | null>(null);
-
-  const address = fromNetwork === "ethereum" ? ethAddress : strkAddress;
+ 
 
   const handleSwitch = () => {
     setFromNetwork(toNetwork);
