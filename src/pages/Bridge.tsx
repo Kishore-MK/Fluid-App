@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft,  Clock, CheckCircle, XCircle, RefreshCw, ExternalLink } from "lucide-react";
 import { lockStrkTokens } from "../utils/strkbridge";
+import { lockETHTokens } from "../utils/ethbridge";
+import { parseEther } from "ethers";
 
 interface BridgeTx {
   hash?: string;
@@ -33,11 +35,22 @@ export default function BridgePage() {
     setIsBridging(true);
 
     try {
+      if(fromNetwork=="starknet"){
       const rawAmount = BigInt(parseFloat(amount) * 1e18);
       console.log(rawAmount);
       
       const TxHash = await lockStrkTokens(rawAmount.toString());
-
+        setBridgeTx({
+        hash: TxHash,
+        status: "pending",
+        fromNetwork,
+        toNetwork,
+        amount,
+      });
+      }
+      else{
+        const rawAmount = parseEther(amount);
+      const TxHash = await lockETHTokens(rawAmount)
       setBridgeTx({
         hash: TxHash,
         status: "pending",
@@ -45,7 +58,7 @@ export default function BridgePage() {
         toNetwork,
         amount,
       });
-
+    }
       // Simulate network delay
       setTimeout(() => {
         setBridgeTx((prev) => ({ ...prev!, status: "confirmed" }));

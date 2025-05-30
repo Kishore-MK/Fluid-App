@@ -4,12 +4,23 @@ import {
   useContext,
   useState,
   useCallback,
+  useRef,
   ReactNode,
 } from "react";
 import { GenerateMnemonic, CreateWallet } from "../utils/starknetwallet";
 import { NetworkType } from "../types";
 import { ethers } from "ethers";
 import { Account,  CallData, Provider as StarknetProvider } from "starknet";
+ 
+type BalanceCacheEntry = {
+  timestamp: number;
+  data: {
+    balance: string;
+    inUsd: string;
+  };
+};
+
+const CACHE_TTL_MS = 60 * 1000;
 
 const STARKNET_STRK_CONTRACT =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -151,21 +162,43 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     setSelectedNetwork(network);
   }, []);
 
-  const getBalance = useCallback(
-    async (selectedNetwork: string) => {
-      let address: string | null = "";
-      let token = null;
 
+const getBalance = useCallback(
+  async (selectedNetwork: string) => {
+    let address: string | null = "";
+    let token = null;
+
+    if (selectedNetwork === "ethereum") {
+      address = ethAddress;
+      token = "eth";
+    } else if (selectedNetwork === "starknet") {
+      address = strkAddress;
+      token = "strk";
+    }
+
+    if (!address) return;
+
+    const cache = useRef<Map<string, BalanceCacheEntry>>(new Map()).current;
+    const cacheKey = `${selectedNetwork}:${address}`;
+
+    const cached = cache.get(cacheKey);
+    const now = Date.now();
+
+    // Serve from cache if valid
+    if (cached && now - cached.timestamp < CACHE_TTL_MS) {
+      const { balance, inUsd } = cached.data;
       if (selectedNetwork === "ethereum") {
-        address = ethAddress;
-        token = "eth";
-      } else if (selectedNetwork === "starknet") {
-        address = strkAddress;
-        token = "strk";
+        setEthBalance(balance);
+        setEthBalanceInUSD(inUsd);
+      } else {
+        setStrkBalance(balance);
+        setStrkBalanceInUSD(inUsd);
       }
+      return;
+    }
 
-      try {
-        // dev
+    try {
+      // dev
         // const res = await fetch(
         //   `http://localhost:3000/api/get-balance?address=${address}&network=${selectedNetwork}&token=${token}`
         // );
@@ -174,23 +207,31 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         const res = await fetch(
           `https://fluid-server.onrender.com/api/get-balance?address=${address}&network=${selectedNetwork}&token=${token}`
         );
-        const data = await res.json();
+      const data = await res.json();
 
-        if (selectedNetwork === "ethereum") {
-          setEthBalance(data.balance);
-          setEthBalanceInUSD(data.inUsd);
-        } else {
-          console.log(data);
-          
-          setStrkBalance(data.balance);
-          setStrkBalanceInUSD(data.inUsd);
-        }
-      } catch (error) {
-        console.error("Error fetching balance:", error);
+      // Cache the result
+      cache.set(cacheKey, {
+        timestamp: now,
+        data: {
+          balance: data.balance,
+          inUsd: data.inUsd,
+        },
+      });
+
+      if (selectedNetwork === "ethereum") {
+        setEthBalance(data.balance);
+        setEthBalanceInUSD(data.inUsd);
+      } else {
+        setStrkBalance(data.balance);
+        setStrkBalanceInUSD(data.inUsd);
       }
-    },
-    [ethAddress, strkAddress]
-  );
+    } catch (error) {
+      console.error("Error fetching balance:", error);
+    }
+  },
+  [ethAddress, strkAddress]
+);
+
 
   const addFunds = useCallback(() => {
     console.log(
