@@ -128,10 +128,9 @@ export function shortenAddress(address: string | null) {
   return `${address.slice(0, 6)}...${address.slice(-4)}`;
 }
 
-export function formatBalance(balance: string) {
-  const num = parseFloat(balance);
-  return num.toLocaleString("en-US", {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 6,
-  });
+export function formatBalance(balance: string | number | undefined | null) {
+  const parsed = parseFloat(balance as string);
+  if (isNaN(parsed)) return "0.00";
+  return parsed.toFixed(4); // or however many decimals you want
 }
+
