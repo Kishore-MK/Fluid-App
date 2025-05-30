@@ -20,7 +20,7 @@ type BalanceCacheEntry = {
   };
 };
 
-const CACHE_TTL_MS = 60 * 1000;
+const CACHE_TTL_MS = 20 * 1000; //60 secs
 
 const STARKNET_STRK_CONTRACT =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
