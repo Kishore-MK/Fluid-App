@@ -165,8 +165,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       }
 
       try {
+        // dev
+        // const res = await fetch(
+        //   `http://localhost:3000/api/get-balance?address=${address}&network=${selectedNetwork}&token=${token}`
+        // );
+
+        // Prod
         const res = await fetch(
-          `http://localhost:3000/api/get-balance?address=${address}&network=${selectedNetwork}&token=${token}`
+          `https://fluid-server.onrender.com/api/get-balance?address=${address}&network=${selectedNetwork}&token=${token}`
         );
         const data = await res.json();
 
