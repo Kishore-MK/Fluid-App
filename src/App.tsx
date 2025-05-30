@@ -13,6 +13,7 @@ import SendPage from "./pages/Send";
 // Components
 import ProtectedRoute from "./components/ProtectedRoute";
 import Setting from "./pages/Settings";
+import BridgePage from "./pages/Bridge";
 
 function App() {
   const { isInitialized, checkWalletExists } = useWallet();
@@ -59,6 +60,14 @@ function App() {
         element={
           <ProtectedRoute>
             <SendPage />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/dashboard/bridge"
+        element={
+          <ProtectedRoute>
+            <BridgePage />
           </ProtectedRoute>
         }
       />

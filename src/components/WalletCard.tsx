@@ -121,13 +121,7 @@ export default function WalletCard() {
               : "Starknet Wallet"}
           </span>
           <div className="flex items-center gap-2">
-            <motion.button
-              whileHover={{ scale: 1.1 }}
-              whileTap={{ scale: 0.95 }}
-              className="glass-effect rounded-full p-2 text-white/90 transition-colors hover:bg-white/20"
-            >
-              <Settings size={16} />
-            </motion.button>
+             
             <motion.div
               className="h-8 w-8 rounded-full bg-white/20 p-1.5"
               whileHover={{ scale: 1.1 }}

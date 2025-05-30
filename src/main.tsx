@@ -9,9 +9,7 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <BrowserRouter>
       <WalletProvider>
-        <HashRouter>
           <App />
-        </HashRouter>
       </WalletProvider>
     </BrowserRouter>
   </StrictMode>

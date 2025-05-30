@@ -1,10 +1,11 @@
-import { ArrowDownToLine, Send, RotateCw, History } from 'lucide-react';
+import { Plus, Send, RotateCw, History, TicketMinus } from 'lucide-react';
 import { useWallet } from '../context/WalletContext';
 import { motion } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 export default function ActionButtons() {
   const { selectedNetwork, addFunds } = useWallet();
-  
+  const navigate =useNavigate()
   const handleAddFunds = () => {
     addFunds();
   };
@@ -39,25 +40,25 @@ export default function ActionButtons() {
         <div className={`flex h-12 w-12 items-center justify-center rounded-full ${
           selectedNetwork === 'ethereum' ? 'bg-accent-eth/10' : 'bg-accent-strk/10'
         }`}>
-          <ArrowDownToLine size={20} className={
+          <Plus size={20} className={
             selectedNetwork === 'ethereum' ? 'text-accent-eth' : 'text-accent-strk'
           } />
         </div>
-        <span className="text-xs text-neutral-300">Receive</span>
+        <span className="text-xs text-neutral-300">Add funds</span>
       </motion.button>
       
       <motion.button
         variants={item}
         className="flex flex-col items-center gap-2"
       >
-        <div className={`flex h-12 w-12 items-center justify-center rounded-full ${
-          selectedNetwork === 'ethereum' ? 'bg-accent-eth/10' : 'bg-accent-strk/10'
-        }`}>
-          <Send size={20} className={
+        <div className={`flex h-12 w-12 items-center justify-center rounded-full  ${
+          selectedNetwork === 'ethereum' ? 'bg-accent-eth/10 hover:bg-accent-eth/30' : 'bg-accent-strk/10 hover:bg-accent-strk/30'
+        }`} onClick={()=>navigate('/dashboard/bridge')}>
+          <TicketMinus size={20} className={
             selectedNetwork === 'ethereum' ? 'text-accent-eth' : 'text-accent-strk'
           } />
         </div>
-        <span className="text-xs text-neutral-300">Send</span>
+        <span className="text-xs text-neutral-300">Bridge</span>
       </motion.button>
       
       <motion.button

@@ -9,6 +9,7 @@ interface WalletContextType {
   selectedNetwork: NetworkType;
   ethAddress: string | null;
   strkAddress: string | null;
+  strkPublicKey:string | null;
   ethBalance: string;
   ethBalanceInISD:string,
   strkBalance: string;
@@ -29,6 +30,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [selectedNetwork, setSelectedNetwork] = useState<NetworkType>('ethereum');
   const [ethAddress, setEthAddress] = useState<string | null>(null);
   const [strkAddress, setStrkAddress] = useState<string | null>(null);
+  const [strkPublicKey, setStrkPublicKey] = useState<string | null>(null);
   const [ethBalance, setEthBalance] = useState<string>('0');
   const [ethBalanceInISD, setEthBalanceInISD] = useState<string>('0');
   const [strkBalance, setStrkBalance] = useState<string>('0');
@@ -47,6 +49,7 @@ const [mnemonic, setMnemonic] = useState<string | null>(null);
        (window as any).__fluidWalletEthAddress = parsed.ethAddress;
       setEthAddress(parsed.ethAddress);
       setStrkAddress(parsed.strkAddress);
+      setStrkPublicKey(parsed.strkPublicKey)
       setMnemonic(parsed.mnemonic);
       setIsInitialized(true);
 
@@ -67,10 +70,10 @@ const [mnemonic, setMnemonic] = useState<string | null>(null);
       setMnemonic(newMnemonic);
       console.log(newMnemonic);
             
-      const { ethAddress: newEthAddress, strkAddress: newStrkAddress ,ethPrivateKey,strkPrivateKey} = 
+      const { ethAddress: newEthAddress, strkAddress: newStrkAddress ,strkPublicKey,ethPrivateKey,strkPrivateKey} = 
         await CreateWallet(newMnemonic);
       console.log("Eth address: ",newEthAddress,"Strk address: ",newStrkAddress);
-      
+      setStrkPublicKey(strkPublicKey)
       setEthAddress(newEthAddress);
       setStrkAddress(newStrkAddress);
       
@@ -94,17 +97,18 @@ const [mnemonic, setMnemonic] = useState<string | null>(null);
 
   const importWallet = useCallback(async (userMnemonic: string) => {
     try {
-      const { ethAddress: newEthAddress, strkAddress: newStrkAddress ,ethPrivateKey,strkPrivateKey} = 
+      const { ethAddress: newEthAddress, strkAddress: newStrkAddress ,strkPublicKey,ethPrivateKey,strkPrivateKey} = 
         await CreateWallet(userMnemonic);
       console.log("Eth address: ",newEthAddress,"Strk address: ",newStrkAddress);
       
       setEthAddress(newEthAddress);
       setStrkAddress(newStrkAddress);
-      
+      setStrkPublicKey(strkPublicKey)
       localStorage.setItem('walletData', JSON.stringify({
         ethAddress: newEthAddress,
         ethPrivateKey:ethPrivateKey,
         strkAddress: newStrkAddress,
+        strkPublicKey:strkPublicKey,
         strkPrivateKey:strkPrivateKey,
         mnemonic: userMnemonic, 
       }));
@@ -155,6 +159,7 @@ const [mnemonic, setMnemonic] = useState<string | null>(null);
     selectedNetwork,
     ethAddress,
     strkAddress,
+    strkPublicKey,
     ethBalance,
     ethBalanceInISD,
     strkBalance,
