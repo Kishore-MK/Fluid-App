@@ -17,8 +17,9 @@ export default function WalletCard() {
     ethAddress,
     strkAddress,
     ethBalance,
-    ethBalanceInISD,
+    ethBalanceInUSD,
     strkBalance,
+    strkBalanceInUSD,
     getBalance,
   } = useWallet();
 
@@ -175,7 +176,7 @@ export default function WalletCard() {
           animate={{ opacity: 1 }}
           transition={{ delay: 0.3 }}
         >
-          ≈ ${ethBalanceInISD} USD
+          ≈ {selectedNetwork === "ethereum" ? ethBalanceInUSD: strkBalanceInUSD} USD
         </motion.div>
 
         <div className="mb-6 flex items-center justify-between gap-3">

@@ -24,9 +24,9 @@ interface WalletContextType {
   strkAddress: string | null;
   strkPublicKey: string | null;
   ethBalance: string;
-  ethBalanceInISD: string;
+  ethBalanceInUSD: string;
   strkBalance: string;
-  strkBalanceInISD: string;
+  strkBalanceInUSD: string;
   mnemonic: string | null;
   checkWalletExists: () => void;
   createNewWallet: () => Promise<string>;
@@ -48,9 +48,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [strkAddress, setStrkAddress] = useState<string | null>(null);
   const [strkPublicKey, setStrkPublicKey] = useState<string | null>(null);
   const [ethBalance, setEthBalance] = useState<string>("0");
-  const [ethBalanceInISD, setEthBalanceInISD] = useState<string>("0");
+  const [ethBalanceInUSD, setEthBalanceInUSD] = useState<string>("0");
   const [strkBalance, setStrkBalance] = useState<string>("0");
-  const [strkBalanceInISD, setStrkBalanceInISD] = useState<string>("0");
+  const [strkBalanceInUSD, setStrkBalanceInUSD] = useState<string>("0");
   const [mnemonic, setMnemonic] = useState<string | null>(null);
 
   const checkWalletExists = useCallback(async () => {
@@ -172,10 +172,12 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
         if (selectedNetwork === "ethereum") {
           setEthBalance(data.balance);
-          setEthBalanceInISD(data.inUsd);
+          setEthBalanceInUSD(data.inUsd);
         } else {
+          console.log(data);
+          
           setStrkBalance(data.balance);
-          setStrkBalanceInISD(data.inUsd);
+          setStrkBalanceInUSD(data.inUsd);
         }
       } catch (error) {
         console.error("Error fetching balance:", error);
@@ -307,9 +309,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     strkAddress,
     strkPublicKey,
     ethBalance,
-    ethBalanceInISD,
+    ethBalanceInUSD,
     strkBalance,
-    strkBalanceInISD,
+    strkBalanceInUSD,
     mnemonic,
     checkWalletExists,
     createNewWallet,
