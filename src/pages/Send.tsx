@@ -139,6 +139,9 @@ export default function SendPage() {
 
   const handleStarknetSend = async () => {
     const walletData = localStorage.getItem("walletData");
+    if (!walletData) {
+        throw new Error("Wallet data not found");
+      }
     const parsed = JSON.parse(walletData || "");
     const strkPrivateKey = parsed.strkPrivateKey;
 
