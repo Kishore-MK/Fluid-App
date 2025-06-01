@@ -3,7 +3,7 @@ import { AccountInterface, Provider, uint256 } from "starknet";
 import { Account, Contract } from "starknet";
 // vite-compatible import
 
-const STRK_TOKEN_ADDRESS =
+export const STRK_TOKEN_ADDRESS =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
 
 export const STRK_CONTRACT_ADDRESS =
@@ -536,7 +536,7 @@ return {STRK_account,ETH_ADDRESS}
 }
 
 
-const erc20Abi = [
+export const erc20Abi = [
   {
     name: "approve",
     type: "function",
