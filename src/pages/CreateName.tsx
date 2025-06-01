@@ -76,7 +76,7 @@ export default function NameRegistration() {
       
       if (available) {
         // Store the selected name for the next page
-        sessionStorage.setItem('selectedDomainName', trimmedName);
+        localStorage.setItem('selectedDomainName', `${trimmedName}.fluid`);
         setShowContinue(true);
       }
     } catch (err) {

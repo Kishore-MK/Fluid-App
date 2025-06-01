@@ -1,14 +1,16 @@
-import { Copy, ExternalLink, Send, ArrowDownToLine } from "lucide-react";
+import { Copy, ExternalLink, Send, ArrowDownToLine, AlertTriangle, CheckCircle } from "lucide-react";
 import { useEffect, useState, useRef } from "react";
 import { useWallet } from "../context/WalletContext";
+import { useNameService } from "../context/NameserviceContext";
 import { shortenAddress, formatBalance } from "../utils/starknetwallet";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import QRCode from "react-qr-code";
 
 export default function WalletCard() {
   const {
     selectedNetwork,
+    setSelectedNetwork,
     ethAddress,
     strkAddress,
     ethBalance,
@@ -18,17 +20,23 @@ export default function WalletCard() {
     getBalance,
   } = useWallet();
 
+  
+
   const address = selectedNetwork === "ethereum" ? ethAddress : strkAddress;
   const balance = selectedNetwork === "ethereum" ? ethBalance : strkBalance;
+  const balanceInUSD = selectedNetwork === "ethereum" ? ethBalanceInUSD : strkBalanceInUSD;
   const navigate = useNavigate();
+  
   const [showQR, setShowQR] = useState(false);
-
   const [copied, setCopied] = useState(false);
-
-  const cacheRef = useRef<Map<string, { data: any; timestamp: number }>>(
-    new Map()
-  );
+  const cacheRef = useRef(new Map());
   const CACHE_TTL_MS = 60 * 1000; // 1 minute
+
+  // Get domain name from session storage (from name registration page)
+ 
+
+  // Check if domain is registered
+  
 
   useEffect(() => {
     const address = selectedNetwork === "ethereum" ? ethAddress : strkAddress;
@@ -40,14 +48,12 @@ export default function WalletCard() {
     const cached = cacheRef.current.get(cacheKey);
 
     if (cached && now - cached.timestamp < CACHE_TTL_MS) {
-      // Skip calling getBalance, data is fresh
       return;
     }
 
-    // Call and cache
     getBalance(selectedNetwork);
     cacheRef.current.set(cacheKey, {
-      data: null, // optional, not storing data here unless needed
+      data: null,
       timestamp: now,
     });
   }, [selectedNetwork, ethAddress, strkAddress, getBalance]);
@@ -60,8 +66,16 @@ export default function WalletCard() {
     }
   };
 
+  const switchNetwork = () => {
+    const newNetwork = selectedNetwork === "ethereum" ? "starknet" : "ethereum";
+    setSelectedNetwork(newNetwork);
+  };
+
+  
+
   return (
     <>
+      
       {showQR ? (
         <div className="relative inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
           <motion.div
@@ -110,9 +124,7 @@ export default function WalletCard() {
             <button
               onClick={() => setShowQR(false)}
               className={`mt-6 w-full rounded-md ${
-                selectedNetwork === "ethereum"
-                  ? "eth-gradient"
-                  : "strk-gradient"
+                selectedNetwork === "ethereum" ? "eth-gradient" : "strk-gradient"
               } py-2 text-sm font-medium text-white transition-colors hover:bg-white/30`}
             >
               Close
@@ -136,19 +148,24 @@ export default function WalletCard() {
 
           <div className="relative p-6">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-xs font-medium uppercase tracking-wider text-white/90">
-                {selectedNetwork === "ethereum"
-                  ? "Ethereum Wallet"
-                  : "Starknet Wallet"}
-              </span>
               <div className="flex items-center gap-2">
-                <motion.div
-                  className="h-8 w-8 rounded-full bg-white/20 p-1.5"
+                <span className="text-xs font-medium uppercase tracking-wider text-white/90">
+                 {
+                    selectedNetwork === "ethereum" ? "Ethereum Wallet" : "Starknet Wallet"
+                  }
+                </span>
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <motion.button
+                  onClick={switchNetwork}
+                  className="h-8 w-8 rounded-full bg-white/20 p-1.5 hover:bg-white/30 transition-colors"
                   whileHover={{ scale: 1.1 }}
                   whileTap={{ scale: 0.95 }}
+                  title={`Switch to ${selectedNetwork === "ethereum" ? "Starknet" : "Ethereum"}`}
                 >
                   {selectedNetwork === "ethereum" ? (
-                    <svg viewBox="0 0 784.37 1277.39" className="h-full w-full">
+                    <svg viewBox="0 0 784.37 1277.39" className="h-full w-full text-white">
                       <path
                         fill="currentColor"
                         d="M392.07 0l-8.57 29.11v844.63l8.57 8.55 392.06-231.75z"
@@ -184,18 +201,20 @@ export default function WalletCard() {
                       <circle cx="119" cy="113" r="9" fill="#EC796B" />
                     </svg>
                   )}
-                </motion.div>
+                </motion.button>
               </div>
             </div>
 
             <motion.div
-              className="mb-2 text-3xl font-bold text-white"
+              className="mb-2 flex items-baseline gap-2"
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.2 }}
             >
-              {formatBalance(balance)}{" "}
-              {selectedNetwork === "ethereum" ? "ETH" : "STRK"}
+              <span className="text-3xl font-bold text-white">
+                ${balanceInUSD}
+              </span>
+              <span className="text-lg text-white/70">USD</span>
             </motion.div>
 
             <motion.div
@@ -204,11 +223,7 @@ export default function WalletCard() {
               animate={{ opacity: 1 }}
               transition={{ delay: 0.3 }}
             >
-              ≈{" "}
-              {selectedNetwork === "ethereum"
-                ? ethBalanceInUSD
-                : strkBalanceInUSD}{" "}
-              USD
+              ≈ {formatBalance(balance)} {selectedNetwork === "ethereum" ? "ETH" : "STRK"}
             </motion.div>
 
             <div className="mb-6 flex items-center justify-between gap-3">

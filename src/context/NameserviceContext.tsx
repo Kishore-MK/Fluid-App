@@ -8,7 +8,13 @@ import {
   useEffect,
   useMemo,
 } from "react";
-import { Account, CallData, Contract, Provider as StarknetProvider } from "starknet";
+import {
+  Account,
+  CallData,
+  Contract,
+  Provider as StarknetProvider,
+  uint256,
+} from "starknet";
 import { useWallet } from "./WalletContext";
 import { FluidABI } from "../abi/FluidABI";
 import { erc20Abi, STRK_TOKEN_ADDRESS } from "../utils/strkbridge";
@@ -97,7 +103,6 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
         NAMESERVICE_CONTRACT_ADDRESS,
         account
       );
-      contract.connect(account);
       return { account, contract, isReady: true };
     } catch (err) {
       console.error("Error creating account/contract:", err);
@@ -144,18 +149,32 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
           setError("Domain is not available");
           return false;
         }
-        
-        const tokenContract = new Contract(erc20Abi, STRK_TOKEN_ADDRESS, account);
-        console.log("Approving BridgeVault to spend tokens...", value);
-        const tx = await tokenContract.approve(NAMESERVICE_CONTRACT_ADDRESS, value);
+
+        const tokenContract = new Contract(
+          erc20Abi,
+          STRK_TOKEN_ADDRESS,
+          account
+        );
+        const strkAmount = BigInt(
+          Math.floor(parseFloat((durationYears * 5).toString()) * 10 ** 18)
+        );
+        const strkAmountUint256 = uint256.bnToUint256(strkAmount);
+        console.log(strkAmountUint256);
+
+        console.log("Approving BridgeVault to spend tokens...", strkAmount);
+        const tx = await tokenContract.approve(
+          NAMESERVICE_CONTRACT_ADDRESS,
+          strkAmountUint256
+        );
         await starknetProvider.waitForTransaction(tx.transaction_hash);
         console.log("Approved.");
-        
+
         const response = await contract.register_domain(name, durationYears);
-        
+        await starknetProvider.waitForTransaction(tx.transaction_hash);
+        console.log("domain registered.");
         // Clear cache for this domain after registration
         availabilityCache.delete(name.toLowerCase());
-        
+
         return !!response;
       } catch (err) {
         handleError(err, "Domain registration");
@@ -192,7 +211,7 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
           starknetAddress,
           ethereumAddress
         );
-        
+
         return !!result;
       } catch (err) {
         handleError(err, "Setting addresses");
@@ -221,7 +240,7 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
         setError(null);
 
         const response = await contract.get_domain_info(name);
-        
+
         return {
           name: response.name,
           owner: response.owner.toString(),

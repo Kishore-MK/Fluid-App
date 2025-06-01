@@ -5,6 +5,8 @@ import {
   useState,
   useCallback,
   ReactNode,
+  SetStateAction,
+  Dispatch,
 } from "react";
 import { GenerateMnemonic, CreateWallet } from "../utils/starknetwallet";
 import { NetworkType } from "../types";
@@ -20,6 +22,7 @@ const starknetProvider = new StarknetProvider({ nodeUrl: STARKNET_RPC });
 interface WalletContextType {
   isInitialized: boolean | null;
   selectedNetwork: NetworkType;
+  setSelectedNetwork:Dispatch<SetStateAction<NetworkType>>;
   ethAddress: string | null;
   strkAddress: string | null;
   strkPublicKey: string | null;
@@ -311,6 +314,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const value: WalletContextType = {
     isInitialized,
     selectedNetwork,
+    setSelectedNetwork,
     ethAddress,
     strkAddress,
     strkPublicKey,
