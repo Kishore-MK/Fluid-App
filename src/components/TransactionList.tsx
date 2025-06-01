@@ -41,11 +41,11 @@ export default function TransactionList() {
   const getApiEndpoint = (address: string) => {
     const networkParam = selectedNetwork === "ethereum" ? "ethereum" : "starknet";
     // dev
-    // return `http://localhost:3000/api/transactions?address=${address}&network=${networkParam}`;
+    return `http://localhost:3000/api/transactions?address=${address}&network=${networkParam}`;
 
     // Prod
 
-     return `https://fluid-server.onrender.com/api/transactions?address=${address}&network=${networkParam}`;
+    //  return `https://fluid-server.onrender.com/api/transactions?address=${address}&network=${networkParam}`;
   };
 
   useEffect(() => {

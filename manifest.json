@@ -10,7 +10,8 @@
   },
   "host_permissions": [
   "http://localhost:3000/*", 
-  "https://sepolia.infura.io/*" 
+  "https://sepolia.infura.io/*",
+  "https://fluid-server.onrender.com/*" 
 ]
 
 }

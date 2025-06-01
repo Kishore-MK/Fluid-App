@@ -19,7 +19,7 @@ export default function CreateWallet() {
       await createNewWallet();
       
       // Navigate to backup page to show mnemonic
-      navigate('/backup');
+      navigate('/create/name');
     } catch (err) {
       console.error('Failed to create wallet:', err);
       setError('Failed to create wallet. Please try again.');

@@ -14,6 +14,7 @@ import SendPage from "./pages/Send";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Setting from "./pages/Settings";
 import BridgePage from "./pages/Bridge";
+import NameRegistration from "./pages/CreateName";
 
 function App() {
   const { isInitialized, checkWalletExists } = useWallet();
@@ -44,6 +45,7 @@ function App() {
         }
       />
       <Route path="/create" element={<CreateWallet />} />
+      <Route path="/create/name" element={<NameRegistration />} />
       <Route path="/import" element={<ImportWallet />} />
       <Route path="/backup" element={<BackupWallet />} />
       <Route path="/settings" element={<Setting />} />
