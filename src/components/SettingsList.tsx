@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { useWallet } from "../context/WalletContext";
 import { useEffect, useState } from "react";
 import Profile from "./Profile";
+import NamePreferences from "./NamePreferences"; // Add this import
 import { deployStarknetAccount, isAccountDeployed } from "../utils/starknetwallet";
 
 // Mock transaction data - in a real app, this would come from the blockchain
@@ -38,6 +39,7 @@ export default function SettingsList() {
   const { selectedNetwork, ethAddress, strkAddress } = useWallet();
   const [address, setAddress] = useState("");
   const [showProfile, setShowProfile] = useState(false);
+  const [showNamePreferences, setShowNamePreferences] = useState(false); // Add this state
 
   const [isStrkDeployed, setIsStrkDeployed] = useState(false);
 
@@ -60,6 +62,7 @@ export default function SettingsList() {
       checkDeployment();
     }
   }, [selectedNetwork, ethAddress, strkAddress]);
+
   return (
     <div className="flex flex-col gap-4 overflow-hidden">
       <h2 className="text-md font-semibold text-white">Account settings</h2>
@@ -117,24 +120,27 @@ export default function SettingsList() {
         transition={{ delay: 0.3 }}
         className="flex flex-col gap-2"
       >
-        {GeneralSettings.map((tx, index) => (
-          <motion.div
-            key={tx.id}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 * index }}
-            className="flex items-center justify-between rounded-lg border border-neutral-800 bg-background-light p-3"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full">
-                {tx.icon}
-              </div>
-              <div>
-                <div className="font-medium text-white">{tx.type}</div>
-              </div>
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="flex items-center justify-between rounded-lg border border-neutral-800 bg-background-light p-3 cursor-pointer"
+          onClick={() => setShowNamePreferences(true)} // Add click handler
+        >
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full">
+              <Settings2Icon />
             </div>
-          </motion.div>
-        ))}
+            <div>
+              <div className="font-medium text-white">Name preferences</div>
+            </div>
+          </div>
+        </motion.div>
+
+        {/* Add the NamePreferences component */}
+        {showNamePreferences && (
+          <NamePreferences onClose={() => setShowNamePreferences(false)} />
+        )}
       </motion.div>
     </div>
   );

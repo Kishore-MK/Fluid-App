@@ -1,10 +1,19 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft,  Clock, CheckCircle, XCircle, RefreshCw, ExternalLink } from "lucide-react";
+import {
+  ArrowLeft,
+  Clock,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+  ExternalLink,
+} from "lucide-react";
 import { lockStrkTokens } from "../utils/strkbridge";
 import { lockETHTokens } from "../utils/ethbridge";
 import { parseEther } from "ethers";
+import { useWallet } from "../context/WalletContext";
+import { useBridge } from "../context/BridgeContext";
 
 interface BridgeTx {
   hash?: string;
@@ -17,12 +26,13 @@ interface BridgeTx {
 
 export default function BridgePage() {
   const navigate = useNavigate();
+  const {ethAddress,strkAddress}=useWallet();
+  const {lockETHTokens,lockStrkTokens}=useBridge()
   const [fromNetwork, setFromNetwork] = useState("ethereum");
   const [toNetwork, setToNetwork] = useState("starknet");
   const [amount, setAmount] = useState("");
   const [isBridging, setIsBridging] = useState(false);
   const [bridgeTx, setBridgeTx] = useState<BridgeTx | null>(null);
- 
 
   const handleSwitch = () => {
     setFromNetwork(toNetwork);
@@ -35,29 +45,31 @@ export default function BridgePage() {
     setIsBridging(true);
 
     try {
-      if(fromNetwork=="starknet"){
-      const rawAmount = BigInt(parseFloat(amount) * 1e18);
-      console.log(rawAmount);
-      
-      const TxHash = await lockStrkTokens(rawAmount.toString());
+      if (fromNetwork == "starknet") {
+        const rawAmount = BigInt(parseFloat(amount) * 1e18);
+        console.log(rawAmount);
+        if(ethAddress){
+        const TxHash = await lockStrkTokens(rawAmount.toString(),ethAddress);
+                setBridgeTx({
+                  hash: TxHash||"Loading",
+                  status: "pending",
+                  fromNetwork,
+                  toNetwork,
+                  amount,
+                });
+        }
+        
+      } else { 
+        if(strkAddress){
+        const TxHash = await lockETHTokens(amount,strkAddress);
         setBridgeTx({
-        hash: TxHash,
-        status: "pending",
-        fromNetwork,
-        toNetwork,
-        amount,
-      });
+          hash: TxHash || "Loading",
+          status: "pending",
+          fromNetwork,
+          toNetwork,
+          amount,
+        });
       }
-      else{
-        const rawAmount = parseEther(amount);
-      const TxHash = await lockETHTokens(rawAmount)
-      setBridgeTx({
-        hash: TxHash,
-        status: "pending",
-        fromNetwork,
-        toNetwork,
-        amount,
-      });
     }
       // Simulate network delay
       setTimeout(() => {
@@ -113,11 +125,23 @@ export default function BridgePage() {
           <div className="flex justify-between text-sm">
             <div>
               <label className="text-white/70">From</label>
-              <div className={`glass-effect rounded px-3 py-2 ${fromNetwork=='ethereum'? "eth-gradient":"strk-gradient"}`}>{fromNetwork}</div>
+              <div
+                className={`glass-effect rounded px-3 py-2 ${
+                  fromNetwork == "ethereum" ? "eth-gradient" : "strk-gradient"
+                }`}
+              >
+                {fromNetwork}
+              </div>
             </div>
             <div>
               <label className="text-white/70">To</label>
-              <div className={`glass-effect rounded px-3 py-2 ${toNetwork=='ethereum'? "eth-gradient":"strk-gradient"}`}>{toNetwork}</div>
+              <div
+                className={`glass-effect rounded px-3 py-2 ${
+                  toNetwork == "ethereum" ? "eth-gradient" : "strk-gradient"
+                }`}
+              >
+                {toNetwork}
+              </div>
             </div>
             <button
               onClick={handleSwitch}
@@ -179,19 +203,30 @@ export default function BridgePage() {
 
             <div className="text-sm">
               <p>
-                Bridging {bridgeTx.amount} tokens from <b>{bridgeTx.fromNetwork}</b> to{" "}
-                <b>{bridgeTx.toNetwork}</b>
+                Bridging {bridgeTx.amount} tokens from{" "}
+                <b>{bridgeTx.fromNetwork}</b> to <b>{bridgeTx.toNetwork}</b>
               </p>
               {bridgeTx.hash && (
                 <div>
-                <p onClick={() => {
-                      window.open(`https://sepolia.voyager.online/tx/${bridgeTx.hash}`);
-                    }} className="mt-2 text-white/70 font-mono text-xs hover:underline cursor-pointer">
-                  Tx Hash: {bridgeTx.hash.slice(0, 10)}...{bridgeTx.hash.slice(-8)}
-                </p>
-                <div>
-                      <ExternalLink size={12} className="mt-[2px]" />
-                    </div>
+                  <p
+                    onClick={() => {
+                      if (fromNetwork == "ethereum") {
+                        window.open(
+                          `https://sepolia.etherscan.io/tx/${bridgeTx.hash}`
+                        );
+                      }
+                      window.open(
+                        `https://sepolia.voyager.online/tx/${bridgeTx.hash}`
+                      );
+                    }}
+                    className="mt-2 text-white/70 font-mono text-xs hover:underline cursor-pointer"
+                  >
+                    Tx Hash: {bridgeTx.hash.slice(0, 10)}...
+                    {bridgeTx.hash.slice(-8)}
+                  </p>
+                  <div>
+                    <ExternalLink size={12} className="mt-[2px]" />
+                  </div>
                 </div>
               )}
               {bridgeTx.error && (

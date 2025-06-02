@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { useWallet } from "../context/WalletContext";
+import { useWallet } from "../context/WalletContext"; 
+import { useBridge } from "../context/BridgeContext"; // Add this import
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -10,9 +11,13 @@ import {
   XCircle,
   Fuel,
   ExternalLink,
+  User,
+  Hash,
+  ArrowUpDown, // Add this for bridge indicator
 } from "lucide-react";
 import { ethers } from "ethers";
-import { Account,  CallData, Provider as StarknetProvider, uint256 } from "starknet";
+import { Account, CallData, Provider as StarknetProvider, uint256 } from "starknet";
+import { useNameService } from "../context/NameserviceContext";
 
 const STARKNET_STRK_CONTRACT =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -28,6 +33,7 @@ interface Transaction {
   gasUsed?: string;
   gasFee?: string;
   error?: string;
+  isBridge?: boolean; // Add this to track bridge transactions
 }
 
 export default function SendPage() {
@@ -39,8 +45,22 @@ export default function SendPage() {
     estimateEthGas,
     estimateStrkGas,
   } = useWallet();
+  
+  // Add bridge context
+  const {
+    lockETHTokens,
+    lockStrkTokens,
+    isLockingETH,
+    isLockingSTRK,
+  } = useBridge();
+  
+  const { resolve, getDomainInfo } = useNameService();
 
-  const [recipient, setRecipient] = useState("");
+  const [recipientInput, setRecipientInput] = useState("");
+  const [resolvedAddress, setResolvedAddress] = useState("");
+  const [isDomainName, setIsDomainName] = useState(false);
+  const [isResolvingDomain, setIsResolvingDomain] = useState(false);
+  const [domainError, setDomainError] = useState("");
   const [amount, setAmount] = useState("");
   const [isSending, setIsSending] = useState(false);
   const [gasData, setGasData] = useState<any>(null);
@@ -49,9 +69,87 @@ export default function SendPage() {
 
   const address = selectedNetwork === "ethereum" ? ethAddress : strkAddress;
 
+  // Helper function to determine if we should use bridge
+  const shouldUseBridge = () => {
+    if (!resolvedAddress || !address) return false;
+    
+    // Normalize addresses for comparison
+    const normalizedResolved = resolvedAddress.toLowerCase();
+    const normalizedCurrent = address.toLowerCase();
+    
+    return normalizedResolved !== normalizedCurrent;
+  };
+
+  // Helper function to check if resolved address is cross-chain
+  const isCrossChainTransfer = () => {
+    if (!resolvedAddress) return false;
+    
+    const isEthAddress = ethers.isAddress(resolvedAddress);
+    const isStarknetAddress = resolvedAddress.startsWith("0x") && resolvedAddress.length > 20;
+    
+    if (selectedNetwork === "ethereum" && isStarknetAddress) return true;
+    if (selectedNetwork === "starknet" && isEthAddress) return true;
+    
+    return false;
+  };
+
+  // Check if input is a domain name or address
+  const checkRecipientInput = async (input: string) => {
+    if (!input.trim()) {
+      setResolvedAddress("");
+      setIsDomainName(false);
+      setDomainError("");
+      return;
+    }
+
+    // Check if it's already an address format
+    const isEthAddress = ethers.isAddress(input);
+    const isStarknetAddress = input.startsWith("0x") && input.length > 20;
+
+    if (isEthAddress || isStarknetAddress) {
+      setResolvedAddress(input);
+      setIsDomainName(false);
+      setDomainError("");
+      return;
+    }
+
+    // Assume it's a domain name if it doesn't look like an address
+    setIsDomainName(true);
+    setIsResolvingDomain(true);
+    setDomainError("");
+
+    try {
+      // First get domain info to check if it exists
+      const resolved  = await resolve(input);
+      if (!resolved) {
+        setDomainError("Domain not found");
+        setResolvedAddress("");
+        return;
+      }
+
+      setResolvedAddress(resolved);
+      setDomainError("");
+    } catch (error) {
+      console.error("Error resolving domain:", error);
+      setDomainError("Failed to resolve domain");
+      setResolvedAddress("");
+    } finally {
+      setIsResolvingDomain(false);
+    }
+  };
+
+  // Handle recipient input changes
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      checkRecipientInput(recipientInput);
+    }, 500); // Debounce the resolution
+
+    return () => clearTimeout(timeoutId);
+  }, [recipientInput, selectedNetwork]);
+
   // Manual gas calculation function
   const calculateGasFees = async () => {
-    if (!amount || !recipient || isSending) {
+    if (!amount || !resolvedAddress || isSending) {
       return;
     }
 
@@ -59,16 +157,28 @@ export default function SendPage() {
 
     try {
       let gasEstimate;
+ 
+      if (shouldUseBridge()) {
+        if (ethers.isAddress(resolvedAddress)) {
+         gasEstimate = await estimateEthGas(resolvedAddress, amount);
+      } else{
+        console.log("Estimating strk gas");
+        gasEstimate = await estimateStrkGas(resolvedAddress, amount);
+      }
+
+      setGasData(gasEstimate);
+        setIsLoadingGas(false);
+        return;
+      }
 
       if (selectedNetwork === "ethereum") {
-        if(!ethers.isAddress(recipient)){
-          return
+        if (!ethers.isAddress(resolvedAddress)) {
+          return;
         }
-        gasEstimate = await estimateEthGas(recipient, amount);
+        gasEstimate = await estimateEthGas(resolvedAddress, amount);
       } else if (selectedNetwork === "starknet") {
         console.log("Estimating strk gas");
-
-        gasEstimate = await estimateStrkGas(recipient, amount);
+        gasEstimate = await estimateStrkGas(resolvedAddress, amount);
       }
 
       setGasData(gasEstimate);
@@ -83,9 +193,8 @@ export default function SendPage() {
   // Clear gas data when inputs change
   useEffect(() => {
     console.log(selectedNetwork);
-
     setGasData(null);
-  }, [amount, recipient, selectedNetwork]);
+  }, [amount, resolvedAddress, selectedNetwork]);
 
   const handleEthereumSend = async () => {
     const walletData = localStorage.getItem("walletData");
@@ -98,7 +207,7 @@ export default function SendPage() {
     const wallet = new ethers.Wallet(privateKey, provider);
 
     const tx = await wallet.sendTransaction({
-      to: recipient,
+      to: resolvedAddress,
       value: ethers.parseEther(amount),
       gasPrice: gasData?.gasPrice
         ? ethers.parseUnits(gasData.gasPrice.toString(), "gwei")
@@ -115,7 +224,7 @@ export default function SendPage() {
       status: "pending",
       network: selectedNetwork,
       amount,
-      to: recipient,
+      to: isDomainName ? recipientInput : resolvedAddress,
       gasUsed: "",
       gasFee: gasData?.totalFee || "",
     });
@@ -140,21 +249,20 @@ export default function SendPage() {
   const handleStarknetSend = async () => {
     const walletData = localStorage.getItem("walletData");
     if (!walletData) {
-        throw new Error("Wallet data not found");
-      }
+      throw new Error("Wallet data not found");
+    }
     const parsed = JSON.parse(walletData || "");
     const strkPrivateKey = parsed.strkPrivateKey;
 
     const account = new Account(starknetProvider, strkAddress!, strkPrivateKey);
     const rawAmount = BigInt(parseFloat(amount) * 1e18);
-    const value =  uint256.bnToUint256(rawAmount);
-   
+    const value = uint256.bnToUint256(rawAmount);
 
     const tx = {
       contractAddress: STARKNET_STRK_CONTRACT,
       entrypoint: "transfer",
       calldata: CallData.compile({
-        recipient: recipient.toLowerCase(),
+        recipient: resolvedAddress.toLowerCase(),
         amount: value,
       }),
     };
@@ -174,7 +282,7 @@ export default function SendPage() {
       status: "pending",
       network: selectedNetwork,
       amount,
-      to: recipient,
+      to: isDomainName ? recipientInput : resolvedAddress,
       gasUsed: "",
       gasFee: gasData?.totalFee || "",
     });
@@ -196,22 +304,75 @@ export default function SendPage() {
     }
   };
 
+  // New bridge send handlers
+  const handleBridgeSend = async () => {
+    try {
+      let txHash: string | null = null;
+      
+      if (selectedNetwork === "ethereum") {
+        // Bridge ETH to Starknet
+        txHash = await lockETHTokens(amount, resolvedAddress);
+      } else {
+        // Bridge STRK to Ethereum
+        txHash = await lockStrkTokens(amount, resolvedAddress);
+      }
+
+      if (txHash) {
+        setTransaction({
+          hash: txHash,
+          status: "pending",
+          network: selectedNetwork,
+          amount,
+          to: isDomainName ? recipientInput : resolvedAddress,
+          gasUsed: "",
+          gasFee: gasData?.totalFee || "",
+          isBridge: true,
+        });
+
+        // For bridge transactions, we'll mark as confirmed after a short delay
+        // In reality, you'd want to listen for bridge completion events
+        setTimeout(() => {
+          setTransaction((prev) => ({
+            ...prev!,
+            status: "confirmed",
+          }));
+        }, 30000); // 30 seconds for demo purposes
+      }
+    } catch (error) {
+      console.error("Bridge transaction failed:", error);
+      setTransaction({
+        status: "failed",
+        error: error instanceof Error ? error.message : "Bridge transaction failed",
+        isBridge: true,
+      });
+    }
+  };
+
   const handleSend = async () => {
-    if (!recipient || !amount || !gasData) return;
+    if (!resolvedAddress || !amount || !gasData) return;
 
     setIsSending(true);
 
     try {
-      if (selectedNetwork === "ethereum") {
-        await handleEthereumSend();
+      if (shouldUseBridge() || isCrossChainTransfer()) {
+        // Use bridge for cross-address or cross-chain transfers
+        await handleBridgeSend();
       } else {
-        await handleStarknetSend();
+        // Use direct transaction for same-address transfers
+        if (selectedNetwork === "ethereum") {
+          await handleEthereumSend();
+        } else {
+          await handleStarknetSend();
+        }
       }
 
       // Reset inputs
-      setRecipient("");
+      setRecipientInput("");
+      setResolvedAddress("");
       setAmount("");
       setGasData(null);
+      setIsDomainName(false);
+      setDomainError("");
     } catch (err: any) {
       console.error("Send failed:", err);
       setTransaction({
@@ -257,6 +418,9 @@ export default function SendPage() {
     }
   };
 
+  // Check if we're currently in a loading state that should disable the button
+  const isInLoadingState = isSending || isLockingETH || isLockingSTRK;
+
   return (
     <div className="space-y-4">
       <motion.div
@@ -279,29 +443,71 @@ export default function SendPage() {
               <ArrowLeft size={16} />
               Back
             </button>
-            <span className="text-xs uppercase tracking-wide">
-              {selectedNetwork === "ethereum" ? "Send ETH" : "Send STRK"}
-            </span>
-          </div>
-
-          <div>
-            <label className="block text-sm mb-1 text-white/70">From:</label>
-            <div className="glass-effect rounded-md px-3 py-2 text-sm text-white overflow-auto custom-scrollbar">
-              {address}
+            <div className="flex items-center gap-2">
+              {(shouldUseBridge() || isCrossChainTransfer()) && (
+                <div className="flex items-center gap-1 text-xs text-blue-400">
+                  <ArrowUpDown size={12} />
+                  <span>Bridge</span>
+                </div>
+              )}
+              <span className="text-xs uppercase tracking-wide">
+                {selectedNetwork === "ethereum" ? "Send ETH" : "Send STRK"}
+              </span>
             </div>
           </div>
 
           <div>
             <label className="block text-sm mb-1 text-white/70">To:</label>
-            <input
-              type="text"
-              placeholder={`Recipient ${
-                selectedNetwork === "ethereum" ? "Ethereum" : "Starknet"
-              } address`}
-              value={recipient}
-              onChange={(e) => setRecipient(e.target.value)}
-              className="w-full rounded-md bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50"
-            />
+            <div className="space-y-2">
+              <input
+                type="text"
+                placeholder={`.fluid name or address`}
+                value={recipientInput}
+                onChange={(e) => setRecipientInput(e.target.value)}
+                className="w-full rounded-md bg-white/10 px-3 py-2 text-sm text-white placeholder:text-white/50"
+              />
+              
+              {/* Show resolving status */}
+              {isResolvingDomain && (
+                <div className="flex items-center gap-2 text-xs text-white/60">
+                  <Clock className="animate-spin" size={12} />
+                  <span>Resolving domain...</span>
+                </div>
+              )}
+
+              {/* Show domain error */}
+              {domainError && (
+                <div className="flex items-center gap-2 text-xs text-red-400">
+                  <XCircle size={12} />
+                  <span>{domainError}</span>
+                </div>
+              )}
+
+              {/* Show resolved address */}
+              {resolvedAddress && !isResolvingDomain && (
+                <div className="glass-effect rounded-md px-3 py-2 space-y-2">
+                  {isDomainName && (
+                    <div className="flex items-center gap-2 text-xs text-white/70">
+                      <User size={12} />
+                      <span>Domain: {recipientInput}</span>
+                    </div>
+                  )}
+                  <div className="flex items-center gap-2 text-xs">
+                    <Hash size={12} className="text-white/50" />
+                    <span className="text-white/80">Sending to:</span>
+                    {(shouldUseBridge() || isCrossChainTransfer()) && (
+                      <div className="flex items-center gap-1 text-blue-400">
+                        <ArrowUpDown size={10} />
+                        <span className="text-xs">via Bridge</span>
+                      </div>
+                    )}
+                  </div>
+                  <div className="font-mono text-xs text-white break-all">
+                    {resolvedAddress}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
           <div>
@@ -317,18 +523,23 @@ export default function SendPage() {
           </div>
 
           {/* Calculate Gas Button */}
-          {amount && recipient && !gasData && !isLoadingGas && (
+          {amount && resolvedAddress && !gasData && !isLoadingGas && !domainError && (
             <motion.button
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
               exit={{ opacity: 0, scale: 0.95 }}
               onClick={calculateGasFees}
-              disabled={isSending}
+              disabled={isInLoadingState}
               className="w-full glass-effect rounded-lg px-4 py-3 text-sm text-white/80 hover:text-white hover:bg-white/10 transition-all duration-200 border border-white/10 hover:border-white/20"
             >
               <div className="flex items-center justify-center gap-2">
                 <Fuel size={16} className="text-orange-400" />
-                <span>Calculate Gas Fees</span>
+                <span>
+                  {shouldUseBridge() || isCrossChainTransfer() 
+                    ? "Calculate Bridge Fees" 
+                    : "Calculate Gas Fees"
+                  }
+                </span>
               </div>
             </motion.button>
           )}
@@ -345,7 +556,7 @@ export default function SendPage() {
                 <div className="flex items-center gap-2 mb-3">
                   <Fuel size={16} className="text-orange-400" />
                   <span className="text-sm font-medium text-white/90">
-                    Gas Fees
+                    {gasData?.isBridge ? "Bridge Fees" : "Gas Fees"}
                   </span>
                 </div>
                 {isLoadingGas ? (
@@ -355,34 +566,45 @@ export default function SendPage() {
                   </div>
                 ) : gasData ? (
                   <div className="space-y-2 text-sm">
-                    <div className="flex justify-between">
-                      <span className="text-white/70">Gas Price:</span>
-                      <span className="text-white">
-                        {selectedNetwork === "ethereum"
-                          ? `${gasData.gasPrice} Gwei`
-                          : gasData.gasPrice}
-                      </span>
-                    </div>
-                    {gasData.gasLimit&&(<div className="flex justify-between">
-                      <span className="text-white/70">Gas Limit:</span>
-                      <span className="text-white">
-                        {gasData.gasLimit?.toLocaleString?.()||""}
-                      </span>
-                    </div>)}
-                    {selectedNetwork === "starknet" &&
-                      gasData.suggestedMaxFee && (
+                    {!gasData.isBridge ? (
+                      <>
                         <div className="flex justify-between">
-                          <span className="text-white/70">
-                            Suggested Max Fee:
-                          </span>
+                          <span className="text-white/70">Gas Price:</span>
                           <span className="text-white">
-                            {typeof gasData.suggestedMaxFee === "string"
-                              ? parseFloat(gasData.suggestedMaxFee).toFixed(6)
-                              : gasData.suggestedMaxFee.toFixed(6)}{" "}
-                            STRK
+                            {selectedNetwork === "ethereum"
+                              ? `${gasData.gasPrice} Gwei`
+                              : gasData.gasPrice}
                           </span>
                         </div>
-                      )}
+                        {gasData.gasLimit && (
+                          <div className="flex justify-between">
+                            <span className="text-white/70">Gas Limit:</span>
+                            <span className="text-white">
+                              {gasData.gasLimit?.toLocaleString?.() || ""}
+                            </span>
+                          </div>
+                        )}
+                        {selectedNetwork === "starknet" &&
+                          gasData.suggestedMaxFee && (
+                            <div className="flex justify-between">
+                              <span className="text-white/70">
+                                Suggested Max Fee:
+                              </span>
+                              <span className="text-white">
+                                {typeof gasData.suggestedMaxFee === "string"
+                                  ? parseFloat(gasData.suggestedMaxFee).toFixed(6)
+                                  : gasData.suggestedMaxFee.toFixed(6)}{" "}
+                                STRK
+                              </span>
+                            </div>
+                          )}
+                      </>
+                    ) : (
+                      <div className="flex justify-between">
+                        <span className="text-white/70">Bridge Fee:</span>
+                        <span className="text-white">~0.001 ETH</span>
+                      </div>
+                    )}
                     <div className="flex justify-between border-t border-white/10 pt-2">
                       <span className="text-white/90 font-medium">
                         Total Fee:
@@ -402,11 +624,23 @@ export default function SendPage() {
             onClick={handleSend}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            disabled={isSending || !gasData || !recipient || !amount}
+            disabled={
+              isInLoadingState || 
+              !gasData || 
+              !resolvedAddress || 
+              !amount || 
+              !!domainError ||
+              isResolvingDomain
+            }
             className="flex w-full items-center justify-center gap-2 rounded-xl eth-gradient py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            <Send size={16} />
-            {isSending ? "Sending..." : "Send"}
+            {shouldUseBridge() || isCrossChainTransfer() ? (
+              <ArrowUpDown size={16} />
+            ) : (
+              <Send size={16} />
+            )}
+            {isInLoadingState ? "Processing..." : 
+             (shouldUseBridge() || isCrossChainTransfer()) ? "Bridge" : "Send"}
           </motion.button>
         </div>
       </motion.div>
@@ -428,14 +662,27 @@ export default function SendPage() {
               <div className="flex items-center gap-3 mb-2">
                 {getStatusIcon(transaction.status)}
                 <span className="font-medium">
-                  {transaction.status === "pending" && "Transaction Pending"}
+                  {transaction.status === "pending" && 
+                    (transaction.isBridge ? "Bridge Transaction Pending" : "Transaction Pending")}
                   {transaction.status === "confirmed" &&
-                    "Transaction Confirmed"}
-                  {transaction.status === "failed" && "Transaction Failed"}
+                    (transaction.isBridge ? "Bridge Transaction Confirmed" : "Transaction Confirmed")}
+                  {transaction.status === "failed" && 
+                    (transaction.isBridge ? "Bridge Transaction Failed" : "Transaction Failed")}
                 </span>
               </div>
 
               <div className="space-y-3 text-sm">
+                {transaction.to && (
+                  <div>
+                    <span className="text-white/70">
+                      {transaction.isBridge ? "Bridged to:" : "Sent to:"}
+                    </span>
+                    <div className="font-mono text-xs rounded px-2 py-1 mt-1 bg-white/5">
+                      {transaction.to}
+                    </div>
+                  </div>
+                )}
+
                 {transaction.hash && (
                   <div>
                     <span className="text-white/70">Transaction Hash:</span>
@@ -471,7 +718,8 @@ export default function SendPage() {
                 )}
               </div>
             </div>
-          </motion.div>
+            </motion.div>
+          
         )}
       </AnimatePresence>
     </div>

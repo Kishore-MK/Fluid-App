@@ -10,8 +10,10 @@ import {
 } from "react";
 import {
   Account,
+  CairoCustomEnum,
   CallData,
   Contract,
+  num,
   Provider as StarknetProvider,
   uint256,
 } from "starknet";
@@ -24,15 +26,11 @@ export interface DomainRecord {
   owner: string;
   registered_at: number;
   expires_at: number;
-  default_chain: SupportedChain;
+  default_chain: any;
   starknet_address: string;
   ethereum_address: string;
 }
-
-export enum SupportedChain {
-  Starknet = 0,
-  Ethereum = 1,
-}
+ 
 
 const NAMESERVICE_CONTRACT_ADDRESS =
   "0x3effdfb035c4105a1e63b31eda041dddb106fd0a167b506ac4b5947677bc32f";
@@ -40,13 +38,14 @@ const STARKNET_RPC = "https://starknet-sepolia.public.blastapi.io/rpc/v0_8";
 const CACHE_TTL = 30000; // 30 seconds
 
 const starknetProvider = new StarknetProvider({ nodeUrl: STARKNET_RPC });
-
-interface NameServiceContextType {
+ interface NameServiceContextType {
   isReady: boolean;
   isLoading: boolean;
   error: string | null;
+  set_default_chain:(name: string, SupportedChain: 'Ethereum'|'Starknet') => Promise<boolean>;
   registerDomain: (name: string, durationYears: number) => Promise<boolean>;
   isAvailable: (name: string) => Promise<boolean>;
+  resolve: (name: string) => Promise<string|null>
   getDomainInfo: (name: string) => Promise<DomainRecord | null>;
   setAddresses: (
     name: string,
@@ -170,14 +169,53 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
         console.log("Approved.");
 
         const response = await contract.register_domain(name, durationYears);
-        await starknetProvider.waitForTransaction(tx.transaction_hash);
+        await starknetProvider.waitForTransaction(response.transaction_hash);
         console.log("domain registered.");
         // Clear cache for this domain after registration
         availabilityCache.delete(name.toLowerCase());
 
-        return !!response;
+         return response.transaction_hash;
       } catch (err) {
         handleError(err, "Domain registration");
+        return false;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [contract, isReady]
+  );
+  const set_default_chain = useCallback(
+    async (
+      name: string,
+      SupportedChain: 'Ethereum'|'Starknet'
+    ): Promise<boolean> => {
+      let DefaultSupportedChain = new CairoCustomEnum({ Starknet: {} });
+      
+      if (!contract || !isReady) {
+        setError("Wallet not ready or not connected to Starknet");
+        return false;
+      }
+
+      if (!name.trim()) {
+        setError("Domain name cannot be empty");
+        return false;
+      }
+
+      if(SupportedChain==='Ethereum'){
+        DefaultSupportedChain = new CairoCustomEnum({ Ethereum: {} });
+      }
+      localStorage.setItem('defaultChain',SupportedChain)
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const result = await contract.set_default_chain(
+          name,DefaultSupportedChain
+        );
+        await starknetProvider.waitForTransaction(result.transaction_hash);
+        return result.transaction_hash;
+      } catch (err) {
+        handleError(err, "Setting addresses");
         return false;
       } finally {
         setIsLoading(false);
@@ -212,7 +250,8 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
           ethereumAddress
         );
 
-        return !!result;
+        await starknetProvider.waitForTransaction(result.transaction_hash);
+        return result.transaction_hash;
       } catch (err) {
         handleError(err, "Setting addresses");
         return false;
@@ -259,7 +298,36 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
     },
     [contract, isReady]
   );
+   const resolve = useCallback(
+    async (name: string): Promise<string | null> => {
+      if (!contract || !isReady) {
+        setError("Wallet not ready or not connected to Starknet");
+        return null;
+      }
 
+      if (!name.trim()) {
+        setError("Domain name cannot be empty");
+        return null;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+
+        const response = await contract.resolve(name);
+        console.log(response);
+        
+        return num.toHex(response);
+        
+      } catch (err) {
+        handleError(err, "Getting domain info");
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [contract, isReady]
+  );
   // Check domain availability with caching
   const isAvailable = useCallback(
     async (name: string): Promise<boolean> => {
@@ -312,7 +380,9 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
     isLoading,
     error,
     registerDomain,
+    set_default_chain,
     isAvailable,
+    resolve,
     getDomainInfo,
     setAddresses,
     clearError,
