@@ -255,8 +255,7 @@ export const BridgeProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const strkContract = new Contract(STRK_ABI, STRK_CONTRACT_ADDRESS, strkAccount);
       
       console.log("Locking STRK tokens...", amount);
-      const amountBN = ethers.parseEther(amount);
-      const amountUint256 = uint256.bnToUint256(amountBN.toString());
+      const amountUint256 = uint256.bnToUint256(amount);
       const nonce = getRandomNonce();
 
       // First approve the tokens

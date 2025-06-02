@@ -43,6 +43,7 @@ const starknetProvider = new StarknetProvider({ nodeUrl: STARKNET_RPC });
   isLoading: boolean;
   error: string | null;
   set_default_chain:(name: string, SupportedChain: 'Ethereum'|'Starknet') => Promise<boolean>;
+  reverse_lookup:(address:string)=> Promise<string | null>;
   registerDomain: (name: string, durationYears: number) => Promise<boolean>;
   isAvailable: (name: string) => Promise<boolean>;
   resolve: (name: string) => Promise<string|null>
@@ -328,6 +329,36 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
     },
     [contract, isReady]
   );
+  const reverse_lookup = useCallback(
+    async (address: string): Promise<string | null> => {
+      if (!contract || !isReady) {
+        setError("Wallet not ready or not connected to Starknet");
+        return null;
+      }
+
+      if (!address) {
+        setError("address cannot be empty");
+        return null;
+      }
+
+      try {
+        setIsLoading(true);
+        setError(null);
+        const DefaultSupportedChain = new CairoCustomEnum({ Starknet: {} });
+        const response = await contract.reverse_lookup(address,DefaultSupportedChain);
+        console.log(response);
+        
+        return response;
+        
+      } catch (err) {
+        handleError(err, "Getting domain info");
+        return null;
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [contract, isReady]
+  );
   // Check domain availability with caching
   const isAvailable = useCallback(
     async (name: string): Promise<boolean> => {
@@ -383,6 +414,7 @@ export function NameServiceProvider({ children }: { children: ReactNode }) {
     set_default_chain,
     isAvailable,
     resolve,
+    reverse_lookup,
     getDomainInfo,
     setAddresses,
     clearError,

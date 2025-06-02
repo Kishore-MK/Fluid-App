@@ -11,7 +11,8 @@ import {
 import { GenerateMnemonic, CreateWallet } from "../utils/starknetwallet";
 import { NetworkType } from "../types";
 import { ethers } from "ethers";
-import { Account,  CallData, Provider as StarknetProvider } from "starknet";
+import { Account, CallData, Provider as StarknetProvider } from "starknet";
+import { useNameService } from "./NameserviceContext";
 
 const STARKNET_STRK_CONTRACT =
   "0x04718f5a0fc34cc1af16a1cdee98ffb20c31f5cd61d6ab07201858f4287c938d";
@@ -22,7 +23,7 @@ const starknetProvider = new StarknetProvider({ nodeUrl: STARKNET_RPC });
 interface WalletContextType {
   isInitialized: boolean | null;
   selectedNetwork: NetworkType;
-  setSelectedNetwork:Dispatch<SetStateAction<NetworkType>>;
+  setSelectedNetwork: Dispatch<SetStateAction<NetworkType>>;
   ethAddress: string | null;
   strkAddress: string | null;
   strkPublicKey: string | null;
@@ -55,7 +56,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [strkBalance, setStrkBalance] = useState<string>("0");
   const [strkBalanceInUSD, setStrkBalanceInUSD] = useState<string>("0");
   const [mnemonic, setMnemonic] = useState<string | null>(null);
-
+  
   const checkWalletExists = useCallback(async () => {
     try {
       if (typeof window === "undefined") return;
@@ -141,7 +142,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           mnemonic: userMnemonic,
         })
       );
-
+      
+      
       setIsInitialized(true);
       return true;
     } catch (error) {
@@ -184,7 +186,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           setEthBalanceInUSD(data.inUsd);
         } else {
           console.log(data);
-          
+
           setStrkBalance(data.balance);
           setStrkBalanceInUSD(data.inUsd);
         }
@@ -237,79 +239,76 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   );
 
   const estimateStrkGas = useCallback(
-  async (to: string, amount: string) => {
-    console.log("Estimating strk gas");
-    try {
-      if (!strkAddress) {
-        throw new Error("Starknet address not available");
+    async (to: string, amount: string) => {
+      console.log("Estimating strk gas");
+      try {
+        if (!strkAddress) {
+          throw new Error("Starknet address not available");
+        }
+
+        const walletData = localStorage.getItem("walletData");
+        if (!walletData) {
+          throw new Error("Wallet data not found");
+        }
+
+        const parsed = JSON.parse(walletData);
+        const strkPrivateKey = parsed.strkPrivateKey;
+
+        if (!strkPrivateKey) {
+          throw new Error("Starknet private key not found");
+        }
+
+        const account = new Account(
+          starknetProvider,
+          strkAddress,
+          strkPrivateKey
+        );
+        const amountInWei = ethers.parseUnits(amount, 18);
+
+        const transferCall = {
+          contractAddress: STARKNET_STRK_CONTRACT,
+          entrypoint: "transfer",
+          calldata: CallData.compile([to, amountInWei.toString(), "0"]),
+        };
+
+        console.log("Transfer call:", transferCall);
+
+        // Estimate the fee
+        const feeEstimate = await account.estimateInvokeFee([transferCall]);
+
+        console.log("Fee estimate result:", feeEstimate);
+
+        // Extract fee information
+        const gasConsumed =
+          feeEstimate.l1_gas_consumed || feeEstimate.l1_gas_consumed || 0;
+        const gasPrice =
+          feeEstimate.l2_gas_price || feeEstimate.l1_gas_price || 0;
+        const overallFee = feeEstimate.overall_fee || 0;
+        const suggestedMaxFee = feeEstimate.suggestedMaxFee || overallFee;
+
+        return {
+          gasPrice: gasPrice.toString(),
+          gasConsumed: gasConsumed.toString(),
+          totalFee: ethers.formatUnits(overallFee.toString(), 18),
+          suggestedMaxFee: ethers.formatUnits(suggestedMaxFee.toString(), 18),
+          overallFeeWei: overallFee.toString(),
+          // Additional useful info
+          resourceBounds: feeEstimate.resourceBounds || null,
+        };
+      } catch (error) {
+        console.error("STRK gas estimate failed:", error);
+
+        // Log more details about the error
+        if (error instanceof Error) {
+          console.error("Error message:", error.message);
+          console.error("Error stack:", error.stack);
+        }
+
+        throw error;
       }
-
-      const walletData = localStorage.getItem("walletData");
-      if (!walletData) {
-        throw new Error("Wallet data not found");
-      }
-
-      const parsed = JSON.parse(walletData);
-      const strkPrivateKey = parsed.strkPrivateKey;
-
-      if (!strkPrivateKey) {
-        throw new Error("Starknet private key not found");
-      }
- 
-      const account = new Account(
-        starknetProvider,
-        strkAddress,
-        strkPrivateKey
-      ); 
-      const amountInWei = ethers.parseUnits(amount, 18);
-       
-      const transferCall = {
-        contractAddress: STARKNET_STRK_CONTRACT,
-        entrypoint: "transfer",
-        calldata: CallData.compile([
-          to, 
-          amountInWei.toString(),  
-          "0"  
-        ])
-      };
-
-      console.log("Transfer call:", transferCall);
-
-      // Estimate the fee
-      const feeEstimate = await account.estimateInvokeFee([transferCall]);
-      
-      console.log("Fee estimate result:", feeEstimate);
-
-      // Extract fee information
-      const gasConsumed = feeEstimate.l1_gas_consumed || feeEstimate.l1_gas_consumed || 0;
-      const gasPrice = feeEstimate.l2_gas_price || feeEstimate.l1_gas_price || 0;
-      const overallFee = feeEstimate.overall_fee || 0;
-      const suggestedMaxFee = feeEstimate.suggestedMaxFee || overallFee;
-
-      return {
-        gasPrice: gasPrice.toString(),
-        gasConsumed: gasConsumed.toString(),
-        totalFee: ethers.formatUnits(overallFee.toString(), 18),
-        suggestedMaxFee: ethers.formatUnits(suggestedMaxFee.toString(), 18),
-        overallFeeWei: overallFee.toString(),
-        // Additional useful info
-        resourceBounds: feeEstimate.resourceBounds || null
-      };
-
-    } catch (error) {
-      console.error("STRK gas estimate failed:", error);
-      
-      // Log more details about the error
-      if (error instanceof Error) {
-        console.error("Error message:", error.message);
-        console.error("Error stack:", error.stack);
-      }
-      
-      throw error;
-    }
-  },
-  [strkAddress]
-);
+    },
+    [strkAddress]
+  );
 
   const value: WalletContextType = {
     isInitialized,

@@ -20,6 +20,8 @@ export default function Dashboard() {
 
   const logout = () => {
   localStorage.removeItem('walletData');
+  localStorage.removeItem('defaultChain');
+  localStorage.removeItem('SelectedDomainName');
     navigate('/');
      checkWalletExists();
     
