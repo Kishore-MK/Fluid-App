@@ -69,23 +69,15 @@ export default function SendPage() {
 
   const address = selectedNetwork === "ethereum" ? ethAddress : strkAddress;
 
-  // Helper function to determine if we should use bridge
-  const shouldUseBridge = () => {
-    if (!resolvedAddress || !address) return false;
-    
-    // Normalize addresses for comparison
-    const normalizedResolved = resolvedAddress.toLowerCase();
-    const normalizedCurrent = address.toLowerCase();
-    
-    return normalizedResolved !== normalizedCurrent;
-  };
+ 
 
   // Helper function to check if resolved address is cross-chain
   const isCrossChainTransfer = () => {
     if (!resolvedAddress) return false;
     
     const isEthAddress = ethers.isAddress(resolvedAddress);
-    const isStarknetAddress = resolvedAddress.startsWith("0x") && resolvedAddress.length > 20;
+    const isStarknetAddress = isEthAddress?false:true;
+    console.log(isEthAddress,isStarknetAddress);
     
     if (selectedNetwork === "ethereum" && isStarknetAddress) return true;
     if (selectedNetwork === "starknet" && isEthAddress) return true;
@@ -158,7 +150,7 @@ export default function SendPage() {
     try {
       let gasEstimate;
  
-      if (shouldUseBridge()) {
+      if (isCrossChainTransfer()) {
         if (ethers.isAddress(resolvedAddress)) {
          gasEstimate = await estimateEthGas(resolvedAddress, amount);
       } else{
@@ -354,7 +346,7 @@ export default function SendPage() {
     setIsSending(true);
 
     try {
-      if (shouldUseBridge() || isCrossChainTransfer()) {
+      if (isCrossChainTransfer()) {
         // Use bridge for cross-address or cross-chain transfers
         await handleBridgeSend();
       } else {
@@ -444,7 +436,7 @@ export default function SendPage() {
               Back
             </button>
             <div className="flex items-center gap-2">
-              {(shouldUseBridge() || isCrossChainTransfer()) && (
+              {( isCrossChainTransfer()) && (
                 <div className="flex items-center gap-1 text-xs text-blue-400">
                   <ArrowUpDown size={12} />
                   <span>Bridge</span>
@@ -495,7 +487,7 @@ export default function SendPage() {
                   <div className="flex items-center gap-2 text-xs">
                     <Hash size={12} className="text-white/50" />
                     <span className="text-white/80">Sending to:</span>
-                    {(shouldUseBridge() || isCrossChainTransfer()) && (
+                    {( isCrossChainTransfer()) && (
                       <div className="flex items-center gap-1 text-blue-400">
                         <ArrowUpDown size={10} />
                         <span className="text-xs">via Bridge</span>
@@ -535,7 +527,7 @@ export default function SendPage() {
               <div className="flex items-center justify-center gap-2">
                 <Fuel size={16} className="text-orange-400" />
                 <span>
-                  {shouldUseBridge() || isCrossChainTransfer() 
+                  { isCrossChainTransfer() 
                     ? "Calculate Bridge Fees" 
                     : "Calculate Gas Fees"
                   }
@@ -634,13 +626,13 @@ export default function SendPage() {
             }
             className="flex w-full items-center justify-center gap-2 rounded-xl eth-gradient py-2 text-sm font-medium text-white disabled:opacity-50"
           >
-            {shouldUseBridge() || isCrossChainTransfer() ? (
+            { isCrossChainTransfer() ? (
               <ArrowUpDown size={16} />
             ) : (
               <Send size={16} />
             )}
             {isInLoadingState ? "Processing..." : 
-             (shouldUseBridge() || isCrossChainTransfer()) ? "Bridge" : "Send"}
+             ( isCrossChainTransfer()) ? "Bridge" : "Send"}
           </motion.button>
         </div>
       </motion.div>
