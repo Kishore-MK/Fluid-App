@@ -7,9 +7,9 @@ import { formatBalance } from "../utils/starknetwallet";
 
 export default function NetworkSelector() {
   const { selectedNetwork } = useWallet();
-  const { strkBalance } = useWallet(); 
+  const { strkBalance ,strkAddress} = useWallet(); 
   const {
-    getDomainInfo,
+    reverse_lookup,
     registerDomain,
     isAvailable,
     isLoading: nameServiceLoading,
@@ -23,12 +23,20 @@ export default function NetworkSelector() {
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
   const [registrationYears, setRegistrationYears] = useState(1);
   useEffect(() => {
+  (async () => {
     const storedDomainName = localStorage.getItem("selectedDomainName");
+
     if (storedDomainName) {
       setDomainName(storedDomainName);
       checkDomainRegistration(storedDomainName);
+    } else {
+      const walletName = (await reverse_lookup(strkAddress || "")) || "";
+      localStorage.setItem("selectedDomainName", walletName);
+      localStorage.setItem("defaultChain", "Starknet");
     }
-  }, []);
+  })();
+}, []);
+
 
   const checkDomainRegistration = async (name: string) => {
     if (!name || !nameServiceReady) return;

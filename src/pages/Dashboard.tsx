@@ -17,7 +17,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   
-
+  
   const logout = () => {
   localStorage.removeItem('walletData');
   localStorage.removeItem('defaultChain');
